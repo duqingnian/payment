@@ -1,0 +1,1 @@
+{"referenceId":"TESTPI2402020YXGEZHT8HCMT811EXGL","orders":[{"id":"1753432778235056131","msn":"220240202215846181737","va":"500507271000009470","urlType":"URL","method":"BCA","status":"SUCCEED","amount":30000,"receivedAmount":30000,"serviceFee":300,"receivedTime":1706886177000}],"_ip":"2605:52c0:2:427:84f2:2fff:fe2d:fde4","_content_type":"application\/json"}
