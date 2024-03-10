@@ -101,7 +101,8 @@ class PayoutController extends BaseController
 		{
 			$this->e('ip is missing');
 		}
-		if(!in_array($request_ip,['2610:150:c009:8:f816:3eff:febb:ef04','64.32.27.21']))
+		$selfips = explode(',',$this->getParameter('selfips'));
+		if(!in_array($request_ip,$selfips))
 		{
 			$ip_table = $this->db(\App\Entity\IpTable::class)->findOneBy(['ip'=>$request_ip]);
 			if(!$ip_table){$this->e('IP_ACCESS_DENY:'.$request_ip);}
@@ -114,7 +115,7 @@ class PayoutController extends BaseController
 		{
 			$this->e('MERCHANT_BY_APPID_404:'.$appid);
 		}
-		if(!in_array($request_ip,['2610:150:c009:8:f816:3eff:febb:ef04','64.32.27.21']) && $ip_table->getMid() != $merchant->getId())
+		if(!in_array($request_ip,$selfips) && $ip_table->getMid() != $merchant->getId())
 		{
 			$ip_table = $this->db(\App\Entity\IpTable::class)->findOneBy(['ip'=>$request_ip,'mid'=>$merchant->getId()]);
 			if(!$ip_table)
