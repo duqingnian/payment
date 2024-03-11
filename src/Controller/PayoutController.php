@@ -221,7 +221,7 @@ class PayoutController extends BaseController
 			$randomPart .= mt_rand(0, 9);
 		}
 
-		$plantform_order_no = $prefix . $merchant->getId(). '-'.$sec .'-'. $millisecond .'-'. $randomPart.$po_end;
+		$plantform_order_no = $prefix . $merchant->getId().$sec . $millisecond . $randomPart.$po_end;
 		if($merchant->isIsTest())
 		{
 			$plantform_order_no = 'TEST'.$plantform_order_no;
