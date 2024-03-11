@@ -208,12 +208,17 @@ class PayoutController extends BaseController
 		}
 		
 		//生成订单号
-		$plantform_order_no = 'PO'.strtoupper(Uuid::v6()->toBase32());
+		$po_start = $this->getParameter('po_start');
+		$po_end = $this->getParameter('po_end');
+		if('' == $po_start){$po_start = '1';}
+		if('' == $po_end){$po_end = 'Z';}
+
+		$plantform_order_no = $po_start.date('md').strtoupper(Uuid::v6()->toBase32());
 		if($merchant->isIsTest())
 		{
-			$plantform_order_no = 'TESTPO'.strtoupper(Uuid::v6()->toBase32());
+			$plantform_order_no = 'TEST'.$po_start.date('md').strtoupper(Uuid::v6()->toBase32());
 		}
-		$plantform_order_no = substr($plantform_order_no,0,35).'L';
+		$plantform_order_no = substr($plantform_order_no,0,31).$po_end;
 		
 		//记录下商户发来的数据
 		$process = new \App\Entity\PayProcessData();
