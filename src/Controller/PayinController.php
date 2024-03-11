@@ -215,17 +215,23 @@ class PayinController extends BaseController
 		}
 		
 		//生成订单号
-		$pi_start = $this->getParameter('pi_start');
+		$prefix = $this->getParameter('pi_start');
 		$pi_end = $this->getParameter('pi_end');
-		if('' == $pi_start){$pi_start = '0';}
-		if('' == $pi_end){$pi_end = 'Z';}
+		
+		$randomLength = 4;
+		list($usec, $sec) = explode(" ", microtime());
+		$millisecond = (int)($usec * 1000000);
 
-		$plantform_order_no = $pi_start.date('md').strtoupper(Uuid::v6()->toBase32());
+		$randomPart = '';
+		for ($i = 0; $i < $randomLength; $i++) {
+			$randomPart .= mt_rand(0, 9);
+		}
+
+		$plantform_order_no = $prefix . $merchant->getId(). '-'.$sec .'-'. $millisecond .'-'. $randomPart.$pi_end;
 		if($merchant->isIsTest())
 		{
-			$plantform_order_no = 'TEST'.$pi_start.date('md').strtoupper(Uuid::v6()->toBase32());
+			$plantform_order_no = 'TEST'.$plantform_order_no;
 		}
-		$plantform_order_no = substr($plantform_order_no,0,31).$pi_end;
 		
 		//记录下商户发来的数据
 		$client_data = json_encode($_POST);
