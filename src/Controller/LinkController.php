@@ -40,7 +40,7 @@ class LinkController extends BaseController
 		$merchant = $this->db(\App\Entity\Merchant::class)->find($order->getMid());
 		if('' != $merchant->getLogo())
 		{
-			$logo = 'https://mstatic.baishipay.com/'.$merchant->getLogo();
+			$logo = $this->getParameters("mstatic_url").$merchant->getLogo();
 		}
 		
 		$methods = $this->db(\App\Entity\ChannelPaymentMethodSetting::class)->findBy(['cid'=>$order->getCid(),'mid'=>$order->getMid(),'is_active'=>1]);
