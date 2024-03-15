@@ -10,6 +10,7 @@ use Symfony\Component\Uid\Uuid;
 
 use Symfony\Component\Messenger\MessageBusInterface;
 use App\Message\MainMsg;
+use App\Util\PlantformGenerat;
 
 class PayoutController extends BaseController
 {
@@ -37,41 +38,42 @@ class PayoutController extends BaseController
 		}
 		
 		//代付必须有的字段
-		$client_post_data = file_get_contents('php://input');
-		if(strlen($client_post_data) < 10)
+		$DATA = file_get_contents('php://input');
+
+		if(strlen($DATA) < 10)
 		{
 			$this->e('JSON_DATA_TOO_SHORT');
 		}
-		$json_parse_err = $this->json_validate($client_post_data);
+		$json_parse_err = $this->json_validate($DATA);
 		if('' != $json_parse_err)
 		{
 			$this->e('post data not validate json string:'.$json_parse_err);
 		}
-		$client_post_data = json_decode($client_post_data,true);
-		if(!is_array($client_post_data) || count($client_post_data) < 5)
+		$DATA = json_decode($DATA,true);
+		if(!is_array($DATA) || count($DATA) < 5)
 		{
 			$this->e('PARAMETER_SIZE_NOT_ENOUGH');
 		}
 		
-		if(!array_key_exists('appid',$client_post_data)) $this->e('APPID_IS_MISSING',7003);
-		if(!array_key_exists('order_no',$client_post_data)) $this->e('ORDERNO_IS_MISSING',7004);
-		if(!array_key_exists('amount',$client_post_data)) $this->e('AMOUNT_IS_MISSING',7005);
-		if(!array_key_exists('notify_url',$client_post_data)) $this->e('NOTIFYURL_IS_MISSING',7006);
-		if(!array_key_exists('timestamp',$client_post_data)) $this->e('TIMESTAMP_IS_MISSING',7007);
-		if(!array_key_exists('version',$client_post_data)) $this->e('VERSION_IS_MISSING',7008);
-		if(!array_key_exists('sign',$client_post_data)) $this->e('SIGN_IS_MISSING',7009);
+		if(!array_key_exists('appid',$DATA)) $this->e('APPID_IS_MISSING',7003);
+		if(!array_key_exists('order_no',$DATA)) $this->e('ORDERNO_IS_MISSING',7004);
+		if(!array_key_exists('amount',$DATA)) $this->e('AMOUNT_IS_MISSING',7005);
+		if(!array_key_exists('notify_url',$DATA)) $this->e('NOTIFYURL_IS_MISSING',7006);
+		if(!array_key_exists('timestamp',$DATA)) $this->e('TIMESTAMP_IS_MISSING',7007);
+		if(!array_key_exists('version',$DATA)) $this->e('VERSION_IS_MISSING',7008);
+		if(!array_key_exists('sign',$DATA)) $this->e('SIGN_IS_MISSING',7009);
 		
 		$channel_id          = $request->request->get('channel_id',''); //商户专属通道id，没有则为默认
-		$appid               = trim($client_post_data['appid']);
-		$merchant_order_no   = trim($client_post_data['order_no']);
-		$amount              = trim($client_post_data['amount']);
-		$merchant_notify_url = trim($client_post_data['notify_url']);
-		$merchant_timestamp  = trim($client_post_data['timestamp']);
-		$version             = trim($client_post_data['version']);
-		$sign                = trim($client_post_data['sign']);
+		$appid               = trim($DATA['appid']);
+		$merchant_order_no   = trim($DATA['order_no']);
+		$amount              = trim($DATA['amount']);
+		$merchant_notify_url = trim($DATA['notify_url']);
+		$merchant_timestamp  = trim($DATA['timestamp']);
+		$version             = trim($DATA['version']);
+		$sign                = trim($DATA['sign']);
 		$note                = '';
 		$simulation = 0;
-		if(array_key_exists('simulation',$client_post_data) && 1 == $client_post_data['simulation'])
+		if(array_key_exists('simulation',$DATA) && 1 == $DATA['simulation'])
 		{
 			$simulation = 1;
 		}
@@ -87,7 +89,7 @@ class PayoutController extends BaseController
 				return new JsonResponse(['code' => 7010,'msg'=>'INVALIDATE_CHANNEL_ID']);
 			}
 		}
-		if(array_key_exists('note',$client_post_data)){$note = substr($client_post_data['note'],0,50);}
+		if(array_key_exists('note',$DATA)){$note = substr($DATA['note'],0,50);}
 		if(strlen($appid) < 6){$this->e('INVALIDATE_APPID');}
 		if(strlen($merchant_order_no) < 4){$this->e('merchant_order_no too short');}
 		if(strlen($merchant_notify_url) < 10){$this->e('merchant_notify_url too short');}
@@ -115,16 +117,18 @@ class PayoutController extends BaseController
 		{
 			$this->e('MERCHANT_BY_APPID_404:'.$appid);
 		}
+
+		//Check ip again
 		if(!in_array($request_ip,$selfips) && $ip_table->getMid() != $merchant->getId())
 		{
 			$ip_table = $this->db(\App\Entity\IpTable::class)->findOneBy(['ip'=>$request_ip,'mid'=>$merchant->getId()]);
 			if(!$ip_table)
 			{
-				$this->e('ACCESS_DENY_THIS_IP:'.$request_ip);
+				$this->e('ACCESS_DENY:'.$request_ip);
 			}
 			if(!$ip_table->isIsActive())
 			{
-				$this->e('IP_DISABLED_THIS_IP:'.$request_ip);
+				$this->e('DISACTIVE:'.$request_ip);
 			}
 		}
 		
@@ -140,14 +144,15 @@ class PayoutController extends BaseController
 		{
 			$this->e('sign err,original sign:['.$sign.'],target sign:['.$my_sign.']');
 		}
+
 		//检测商户订单号是不是已经存在了
 		$merchant_order_no_checker = $this->entityManager->getConnection()->executeQuery('select id from order_payout where mno="'.$merchant_order_no.'"')->fetchAssociative();
 		if($merchant_order_no_checker)
 		{
 			$this->e('INVALIDATE_ORDER_NO,PLEASE_CHANGE');
 		}
-		
-		//获取通道
+
+		//Get merchant's channel
 		$merchant_channel = $this->_get_merchant_channel($merchant,$channel_id);
 		if(NULL == $merchant_channel)
 		{
@@ -169,7 +174,7 @@ class PayoutController extends BaseController
 			return new JsonResponse(['code' => 7018,'msg'=>'CHANNEL_SLUG_NULL:'.$channel->getId()]);
 		}
 		
-		//检查商户通道的支付上限和下限
+		//Check merchant's channel's min and max
 		$merchant_channel_payout_min = $merchant_channel->getMin();
 		$merchant_channel_payout_max = $merchant_channel->getMax();
 		
@@ -188,15 +193,15 @@ class PayoutController extends BaseController
 			}
 		}
 		
-		//检测余额是不是足以发起代付
+		//Check merchant's balance
 		$balance = 1 == $merchant->isIsTest() ? $merchant->getTestAmount() : $merchant->getAmount();
 		$fee = ((float)$amount * ($merchant_channel->getPct()/100)) + (float)$merchant_channel->getSf();
 		if($balance - $amount - $fee < 0)
 		{
 			$this->e('INSUFFICIENT_BALANCE:AMOUNT:'.$amount.':BALANCE:'.$balance.':FEE:'.$fee.':NEED_MIN:'.($amount + $fee));
 		}
-		
-		//查找国家和货币
+
+		//Find country and currency
 		$country = ['name'=>'','slug'=>'','currency'=>'','currency_name'=>''];
 		if('' != $channel->getCountry())
 		{
@@ -206,117 +211,71 @@ class PayoutController extends BaseController
 				$country = ['name'=>$channel_country->getName(),'slug'=>$channel_country->getSlug(),'currency'=>$channel_country->getCurrency(),'currency_name'=>$channel_country->getCurrencyName()];
 			}
 		}
-		
-		//生成订单号
-		//生成订单号
-		$prefix = $this->getParameter('po_start');
-		$po_end = $this->getParameter('po_end');
-		
-		$randomLength = 4;
-		list($usec, $sec) = explode(" ", microtime());
-		$millisecond = (int)($usec * 1000000);
 
-		$randomPart = '';
-		for ($i = 0; $i < $randomLength; $i++) {
-			$randomPart .= mt_rand(0, 9);
-		}
-
-		$plantform_order_no = $prefix . $merchant->getId().$sec . $millisecond . $randomPart.$po_end;
-		if($merchant->isIsTest())
+		//Get channel's handler and check
+		$cls = 'App\\Channel\\'.ucfirst(trim($channel->getSlug())).'\\Payout';
+		if(!class_exists($cls))
 		{
-			$plantform_order_no = 'TEST'.$plantform_order_no;
+			$this->e('['.$channel->getId().']channel payout handler not exist');
 		}
+		$channel_handler = new ($cls)();
+		$channel_handler->check($DATA);
 		
-		//记录下商户发来的数据
+		//Generate the plantform order number
+		$generator = new PlantformGenerat();
+		$plantform_order_no = $generator->GetPno([
+			'prefix'=>$this->getParameter('po_start'),
+			'end'=>$this->getParameter('po_end'),
+			'merchant'=>$merchant
+		]);
+
+		//Create an empty order template
+		$order = new \App\Entity\OrderPayout();
+		$order->setMid($merchant->getId());
+		$order->setCid($channel->getId());
+		$order->setAmount($amount);
+		$order->setCno('');
+		$order->setMno($merchant_order_no);
+		$order->setPno($plantform_order_no);
+		$order->setStatus('GENERATED');
+		$order->setCpct($channel->getPayinPct());
+		$order->setCsf($channel->getPayinSf());
+		$order->setCfee($amount * ($channel->getPayoutPct() / 100) + (float)$channel->getPayoutSf());
+		$order->setMpct($merchant_channel->getPct());
+		$order->setMsf($merchant_channel->getSf());
+		$order->setMfee($fee);
+		$order->setRamount('');
+		$order->setNote('');
+		$order->setIsTest($merchant->isIsTest());
+		$order->setMerchantNotifyUrl($merchant_notify_url);
+		$order->setCountry($country['slug']);
+		$order->setCurrency($country['currency']);
+		$order->setOriginalStatus("");
+		$order->setCreatedAt(time());
+		$order->setRetry(0);
+		$this->save($order);
+
+		if(is_numeric($order->getId()) && $order->getId() > 0)
+		{
+			//do nothing
+		}
+		else
+		{
+			$this->e('order create fail, traceid:'.$plantform_order_no);
+		}
+		//save the merchant's post data
+		$DATA['_ip'] = $request_ip;
 		$process = new \App\Entity\PayProcessData();
 		$process->setIo('O');
-		$process->setBundle('M_RTPF_D'); //merchant request to plantform data
-		$process->setData(json_encode($client_post_data));
+		$process->setBundle('M_RTPF_D');
+		$process->setData(json_encode($DATA));
 		$process->setPno($plantform_order_no);
 		$process->setCid($channel->getId());
 		$process->setMid($merchant->getId());
 		$process->setCreatedAt(time());
 		$this->save($process);
-		
-		//把data传递给通道  记录发给通道的数据 记录通道返回的数据
-		$DATA = $client_post_data;
-		$DATA['channel_id'] = $channel->getId();
-		$DATA['merchant_id'] = $merchant->getId();
-		$DATA['country'] = $country;
-		
-		//生成回调地址
-		$DATA['plantform_notify_url'] = $this->generateUrl('api_notify',['io'=>'O','channel_slug'=>strtolower($channel->getSlug())],UrlGeneratorInterface::ABSOLUTE_URL);
-		$DATA['plantform_notify_url'] = str_replace('http:','https:',$DATA['plantform_notify_url']);
-		
-		$_simulation = 0;
-		if($merchant->isIsTest() || 1 == $simulation)
-		{
-			$_simulation = 1;
-			$DATA['TEST'] = [
-				'channel_order_no'=>'SCO_'.strtoupper(substr(md5($merchant->getId().$plantform_order_no.microtime()),0,10)),
-			];
-		}
-		
-		$cls = 'App\\Channel\\'.ucfirst($channel_slug).'\\Payout';
-		if(!class_exists($cls))
-		{
-			$this->e('payout channel:'.$channel_slug.' handle not exist!');
-		}
-		$channel_handler = new ($cls)();
-		$channel_handler->set_data([
-			'entityManager'=>$this->entityManager,
-			'DATA'=>$DATA,
-			'plantform_order_no'=>$plantform_order_no,
-		]);
-		$ret = $channel_handler->handle($_simulation);
-		
-		if(!is_array($ret))
-		{
-			$this->e('An error occurred while creating payment order,traceid:'.$plantform_order_no);
-		}
-		
-		//没问题，生成订单
-		if(0 == $ret['code'])
-		{
-			//通道单号
-			$channel_order_no = '';
-			
-			if(array_key_exists('channel_order_no',$ret))
-			{
-				$channel_order_no = $ret['channel_order_no'];
-			}
-			
-			//生成订单
-			$order = new \App\Entity\OrderPayout();
-			$order->setMid($merchant->getId());
-			$order->setCid($channel->getId());
-			$order->setAmount($amount);
-			$order->setCno($channel_order_no);
-			$order->setMno($merchant_order_no);
-			$order->setPno($plantform_order_no);
-			$order->setStatus('GENERATED');
-			$order->setCpct($channel->getPayinPct());
-			$order->setCsf($channel->getPayinSf());
-			$order->setCfee($amount * ($channel->getPayoutPct() / 100) + (float)$channel->getPayoutSf());
-			$order->setMpct($merchant_channel->getPct());
-			$order->setMsf($merchant_channel->getSf());
-			$order->setMfee((float)$amount * ($merchant_channel->getPct() / 100) + (float)$merchant_channel->getSf());
-			$order->setRamount('');
-			$order->setNote($note);
-			$order->setIsTest($merchant->isIsTest());
-			$order->setMerchantNotifyUrl($merchant_notify_url);
-			$order->setCountry($country['slug']);
-			$order->setCurrency($country['currency']);
-			$order->setOriginalStatus("");
-			$order->setCreatedAt(time());
 
-			$this->save($order);
-		}
-		else
-		{
-			return new JsonResponse($ret);
-		}
-		
+		//Response to the merchant
 		$response_data = [
 			'code'=>0,
 			'msg'=>'OK',
@@ -326,7 +285,7 @@ class PayoutController extends BaseController
 			'amount'=>$order->getAmount(),
 			'created_at'=>$order->getCreatedAt(),
 			'currency'=>$country['currency'],
-			'updated_at'=>time()+1,
+			'updated_at'=>time(),
 			'version'=>'2.0',
 		];
 		
@@ -343,18 +302,52 @@ class PayoutController extends BaseController
 		
 		$process = new \App\Entity\PayProcessData();
 		$process->setIo('O');
-		$process->setBundle('PF_RTM_D'); //plantform return to merchant data
+		$process->setBundle('PF_RTM_D');
 		$process->setData(json_encode($response_data));
 		$process->setPno($plantform_order_no);
 		$process->setCid($channel->getId());
 		$process->setMid($merchant->getId());
 		$process->setCreatedAt(time());
 		$this->save($process);
-		
-		//加入消息队列来变更余额和代付金额
-		$bus->dispatch(new MainMsg(json_encode(['action'=>'PAYOUT_CREATED','order_id'=>$order->getId()])));
 
-		//发送json数据给接口调用者
+		//Generate notify url
+		$plantform_notify_url = $this->generateUrl('api_notify',['io'=>'O','channel_slug'=>strtolower($channel->getSlug())],UrlGeneratorInterface::ABSOLUTE_URL);
+		$plantform_notify_url = str_replace('http:','https:',$plantform_notify_url);
+
+		//Prepare MSG struct to message queue
+		$DATA['plantform_notify_url'] = $plantform_notify_url;
+		$DATA['channel_id'] = $order->getCid();
+		$DATA['merchant_id'] = $order->getMid();
+		$MSG = [
+			'action'=>'PAYOUT_CREATED',
+			'order_id'=>$order->getId(),
+			'DATA'=>$DATA,
+		];
+		/*
+		print_r($MSG);die();
+		[action] => PAYOUT_CREATED
+   		[order_id] => 6
+    	[DATA] => Array
+        (
+            [bank_code] => 1281713
+            [account_name] => 1281714
+            [account_no] => 1281715
+            [amount] => 44
+            [appid] => b59b9b9c75a6423f89236d1a876e7df7
+            [order_no] => MHO0305987a86e46e5a1d8265a084db0067
+            [notify_url] => https://www.abc.com/api_notify?order_no=MHO0305987a86e46e5a1d8265a084db0067
+            [version] => 2.0
+            [timestamp] => 1710446974
+            [sign] => fb542edce745d11e2c338f2ceab47770
+            [_ip] => 127.0.0.1
+            [plantform_notify_url] => https://pay.abc.com/api/notify/O/channel1
+            [channel_id] => 65
+            [merchant_id] => 3
+        )
+		*/
+		//Add message queue
+		$bus->dispatch(new MainMsg(json_encode($MSG)));
+
 		return new JsonResponse($response_data);
 	}
 	
@@ -426,7 +419,7 @@ class PayoutController extends BaseController
 	
 	private function _filter_danger($str)
 	{
-		$danger_symbos = ['dir','php','ini','exec','syst','delete','select','file','where'];
+		$danger_symbos = ['dir','php','ini','exec','syst','delete','select','file','where','?','"',"'"];
 		$str = trim($str);
 		return str_replace($danger_symbos,'',$str);
 	}
