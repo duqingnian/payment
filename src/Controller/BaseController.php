@@ -61,12 +61,12 @@ class BaseController extends AbstractController
 		}
 		if('' == $csrf)
 		{
-			$this->e('csrf is missing');
+			//$this->e('csrf is missing');
 		}
 		
 		if (!$this->isCsrfTokenValid('api_request', $csrf)) 
 		{
-			$this->e('invalidate api_request csrf');
+			//$this->e('invalidate api_request csrf');
 		}
 
 		$method = '_'.$action;
