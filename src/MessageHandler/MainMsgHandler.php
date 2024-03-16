@@ -88,7 +88,7 @@ class MainMsgHandler implements MessageHandlerInterface
 			else
 			{
 				//Check merchant's balance
-				$balance = 1 == $merchant->isIsTest() ? $merchant->getTestAmount() : $merchant->getAmount();
+				$balance = 1 == $order->isIsTest() ? $merchant->getTestAmount() : $merchant->getAmount();
 				$fee = $order->getMfee();
 				if($balance - $order->getAmount() - $fee < 0)
 				{
@@ -117,9 +117,12 @@ class MainMsgHandler implements MessageHandlerInterface
 						'DATA'=>$DATA,
 						'plantform_order_no'=>$order->getPno(),
 					]);
-						
-					$ret = $channel_handler->handle($merchant->isIsTest());
-					//print_r($ret);
+					
+					$ret = $channel_handler->handle($order->isIsTest());
+					if(!is_array($ret))
+					{
+						$ret = json_decode($ret, true);
+					}
 					if(0 == $ret['code'])
 					{
 						///////////////////////////////////////////////////
@@ -131,10 +134,10 @@ class MainMsgHandler implements MessageHandlerInterface
 								$order->setCno($ret['channel_order_no']);
 							}
 							
-							if(1 == $merchant->isIsTest())
+							if(1 == $order->isIsTest())
 							{
 								$sql = 'UPDATE merchant SET test_amount = test_amount - :A,test_df_pool = test_df_pool + :P  WHERE id = :id';
-								$this->entityManager->getConnection()->executeStatement($sql,['id' => $merchant->getId(), 'A' => $order->getAmount() - $order->getMfee(), 'P'=>$order->getAmount()]);
+								$this->entityManager->getConnection()->executeStatement($sql,['id' => $merchant->getId(), 'A' => $order->getAmount() + $order->getMfee(), 'P'=>$order->getAmount()]);
 								
 								$old_amount = $merchant->getTestAmount();
 								$new_amount = $merchant->getTestAmount() - $order->getAmount() - $order->getMfee();
@@ -145,7 +148,7 @@ class MainMsgHandler implements MessageHandlerInterface
 							else
 							{
 								$sql = 'UPDATE merchant SET amount = amount - :A,df_pool = df_pool + :P  WHERE id = :id';
-								$this->entityManager->getConnection()->executeStatement($sql,['id' => $merchant->getId(), 'A' => $order->getAmount() - $order->getMfee(), 'P'=>$order->getAmount()]);
+								$this->entityManager->getConnection()->executeStatement($sql,['id' => $merchant->getId(), 'A' => $order->getAmount() + $order->getMfee(), 'P'=>$order->getAmount()]);
 								
 								$old_amount = $merchant->getAmount();
 								$new_amount = $merchant->getAmount() - $order->getAmount() - $order->getMfee();
@@ -164,7 +167,7 @@ class MainMsgHandler implements MessageHandlerInterface
 							$alog->setMid($order->getMid());
 							$alog->setIp($DATA['_ip']);
 							$alog->setSummary('PO_CREATED');
-							$alog->setIsTest($merchant->isIsTest());
+							$alog->setIsTest($order->isIsTest());
 							$alog->setMoneyBefore($old_amount);
 							$alog->setMoney($order->getAmount());
 							$alog->setMoneyAfter($new_amount);
@@ -181,7 +184,7 @@ class MainMsgHandler implements MessageHandlerInterface
 							$df_log->setMid($order->getMid());
 							$df_log->setIp($DATA['_ip']);
 							$df_log->setSummary('PO_CREATED');
-							$df_log->setIsTest($merchant->isIsTest());
+							$df_log->setIsTest($order->isIsTest());
 							$df_log->setMoneyBefore($old_df);
 							$df_log->setMoney($order->getAmount());
 							$df_log->setMoneyAfter($new_df);

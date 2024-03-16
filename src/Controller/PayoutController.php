@@ -313,6 +313,13 @@ class PayoutController extends BaseController
 		//Generate notify url
 		$plantform_notify_url = $this->generateUrl('api_notify',['io'=>'O','channel_slug'=>strtolower($channel->getSlug())],UrlGeneratorInterface::ABSOLUTE_URL);
 		$plantform_notify_url = str_replace('http:','https:',$plantform_notify_url);
+		
+		if($merchant->isIsTest() || 1 == $simulation)
+		{
+			$DATA['TEST'] = [
+				'channel_order_no'=>'SCO_'.strtoupper(substr(md5($merchant->getId().$plantform_order_no.microtime()),0,10)),
+			];
+		}
 
 		//Prepare MSG struct to message queue
 		$DATA['plantform_notify_url'] = $plantform_notify_url;
@@ -323,28 +330,7 @@ class PayoutController extends BaseController
 			'order_id'=>$order->getId(),
 			'DATA'=>$DATA,
 		];
-		/*
-		print_r($MSG);die();
-		[action] => PAYOUT_CREATED
-   		[order_id] => 6
-    	[DATA] => Array
-        (
-            [bank_code] => 1281713
-            [account_name] => 1281714
-            [account_no] => 1281715
-            [amount] => 44
-            [appid] => b59b9b9c75a6423f89236d1a876e7df7
-            [order_no] => MHO0305987a86e46e5a1d8265a084db0067
-            [notify_url] => https://www.abc.com/api_notify?order_no=MHO0305987a86e46e5a1d8265a084db0067
-            [version] => 2.0
-            [timestamp] => 1710446974
-            [sign] => fb542edce745d11e2c338f2ceab47770
-            [_ip] => 127.0.0.1
-            [plantform_notify_url] => https://pay.abc.com/api/notify/O/channel1
-            [channel_id] => 65
-            [merchant_id] => 3
-        )
-		*/
+		
 		//Add message queue
 		$bus->dispatch(new MainMsg(json_encode($MSG)));
 
