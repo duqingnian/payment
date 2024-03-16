@@ -51,7 +51,24 @@ class SyncMsg
 		$entityManager->persist($notify_log);
 		$entityManager->flush();
     }
-
+	function stand_ascii_params($params = array())
+	{
+		if (!empty($params)) 
+		{
+			$p = ksort($params);
+			if ($p) 
+			{
+				$str = '';
+				foreach ($params as $k => $val) 
+				{
+					$str .= $k . '=' . $val . '&';
+				}
+				$strs = rtrim($str, '&');
+				return $strs;
+			}
+		}
+		return '';
+	}
     function post_json($url, $jsonStr,$header=[],$method='POST')
 	{
 		if(is_array($jsonStr))
