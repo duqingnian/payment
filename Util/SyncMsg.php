@@ -43,7 +43,7 @@ class SyncMsg
 		$notify_log->setDelay('0');
 		$notify_log->setTargetTime(time());
 		$notify_log->setOrderId($order->getId());
-		$notify_log->setData($merchant_notify_data);
+		$notify_log->setData(json_encode($merchant_notify_data));
 		$notify_log->setMerchantNotifyUrl($merchant_notify_url);
 		$notify_log->setRetHttpCode($ret[0]);
 		$notify_log->setRet(substr($ret[1],0,200));
